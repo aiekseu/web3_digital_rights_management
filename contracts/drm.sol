@@ -3,9 +3,13 @@ pragma solidity ^0.8.0;
 
 import "@chainlink/contracts/src/v0.8/ChainlinkClient.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 
 /// @title Music Royalties Distribution
 contract MusicRoyalties is ChainlinkClient {
+
+    using Counters for Counters.Counter;
+
     /// @notice Struct for storing song data
     struct Song {
         uint256 id;
@@ -13,9 +17,12 @@ contract MusicRoyalties is ChainlinkClient {
         string artist;
         uint256 playCount;
         uint256 totalRoyalties;
+        mapping(uint256 => address) stakeholders;
         mapping(address => uint256) stakeholderShares;
+        uint256 stakeholdersNumber;
     }
     mapping(uint256 => Song) public songs;
+    Counters.Counter songsCounter;
 
     /// @notice Struct for storing license data
     struct License {
@@ -25,6 +32,7 @@ contract MusicRoyalties is ChainlinkClient {
         uint256 duration;
     }
     mapping(uint256 => License) public licenses;
+    Counters.Counter licensesCounter;
 
     /// @notice Event for tracking song registration
     event SongRegistered(uint256 indexed id, address indexed artist, string metadata);
@@ -35,16 +43,6 @@ contract MusicRoyalties is ChainlinkClient {
     /// @notice Event for tracking royalty distribution
     event RoyaltiesDistributed(uint256 indexed id, uint256 playCount);
 
-
-    /// @notice Get song by ID
-    function getSong(uint songId) external view returns (Song memory) {
-        return songs[songId];
-    }
-
-    /// @notice Get license by ID
-    function getLicense(uint licenseId)external view returns (License memory) {
-        return songs[licenseId];
-    }
 
     /// @notice Function to register a song with its metadata and stakeholder shares
     /// @param id The unique identifier for the song
@@ -65,8 +63,10 @@ contract MusicRoyalties is ChainlinkClient {
         newSong.id = id;
         newSong.title = title;
         newSong.artist = artist;
+        newSong.stakeholdersNumber = stakeholders.length;
 
         for (uint256 i = 0; i < stakeholders.length; i++) {
+            newSong.stakeholders[i] = stakeholders[i];
             newSong.stakeholderShares[stakeholders[i]] = shares[i];
         }
     }
@@ -86,6 +86,7 @@ contract MusicRoyalties is ChainlinkClient {
         require(song.id != 0, "Song not found");
 
         for (uint256 i = 0; i < stakeholders.length; i++) {
+            song.stakeholders[i] = stakeholders[i];
             song.stakeholderShares[stakeholders[i]] = shares[i];
         }
     }
@@ -101,23 +102,24 @@ contract MusicRoyalties is ChainlinkClient {
     /// @notice Function to calculate royalties for each stakeholder
     /// @param songId The unique identifier for the song
     /// @param playCount The number of plays for which royalties are calculated
-    /// @return royalties A mapping of stakeholder addresses to their calculated royalty amounts
-    function calculateRoyalties(uint256 songId, uint256 playCount) private view returns (mapping(address => uint256) memory royalties) {
+    /// @return royaltyAmounts An array containing the calculated royalty amounts for each stakeholder
+    function calculateRoyalties(uint256 songId, uint256 playCount) private view returns (uint256[] memory royaltyAmounts) {
         Song storage song = songs[songId];
-        uint256 totalShares;
-        for (uint256 i = 0; i < stakeholders.length; i++) {
-            totalShares += song.stakeholderShares[stakeholders[i]];
-        }
+        royaltyAmounts = new uint256[](song.stakeholdersNumber);
 
-        uint256 totalRoyalties = song.playCount * playCount;
-
-        for (uint256 i = 0; i < stakeholders.length; i++) {
-            address stakeholder = stakeholders[i];
+        for (uint256 i = 0; i < song.stakeholdersNumber; i++) {
+            address stakeholder = song.stakeholders[i];
             uint256 share = song.stakeholderShares[stakeholder];
-            uint256 amount = (totalRoyalties * share) / totalShares;
-            royalties[stakeholder] = amount;
+            uint256 amount = playCount * share / 100;
+
+            royaltyAmounts[i] = amount;
         }
     }
+    function calculateRoyaltiesTest(uint256 songId, uint256 playCount) external view returns (uint256[] memory royaltyAmounts) {
+        return calculateRoyalties(songId, playCount);
+    }
+
+
 
     /// @notice Function to distribute royalties to stakeholders for a specific song
     /// @param id The unique identifier for the song
@@ -125,11 +127,13 @@ contract MusicRoyalties is ChainlinkClient {
     /// @param tokenAddress The address of the ERC20 token used for royalty payments
     function distributeRoyalties(uint256 id, uint256 playCount, address tokenAddress) external {
         IERC20 token = IERC20(tokenAddress);
-        mapping(address => uint256) memory royalties = calculateRoyalties(id, playCount);
+        Song storage song = songs[id];
 
-        for (uint256 i = 0; i < recipients.length; i++) {
-            address recipient = recipients[i];
-            uint256 amount = royalties[recipient];
+        uint256[] memory royalties = calculateRoyalties(id, playCount);
+
+        for (uint256 i = 0; i < song.stakeholdersNumber; i++) {
+            address recipient = song.stakeholders[i];
+            uint256 amount = royalties[i];
             require(token.transferFrom(msg.sender, recipient, amount), "Failed to transfer royalties");
         }
     }
@@ -150,11 +154,13 @@ contract MusicRoyalties is ChainlinkClient {
         for (uint256 i = 0; i < ids.length; i++) {
             uint256 id = ids[i];
             uint256 playCount = playCounts[i];
-            mapping(address => uint256) memory royalties = calculateRoyalties(id, playCount);
+            Song storage song = songs[id];
 
-            for (uint256 j = 0; j < recipients.length; j++) {
-                address recipient = recipients[j];
-                uint256 amount = royalties[recipient];
+            uint256[] memory royalties = calculateRoyalties(id, playCount);
+
+            for (uint256 j = 0; j < song.stakeholdersNumber; j++) {
+                address recipient = song.stakeholders[j];
+                uint256 amount = royalties[j];
                 require(token.transferFrom(msg.sender, recipient, amount), "Failed to transfer royalties");
             }
         }
@@ -191,12 +197,12 @@ contract MusicRoyalties is ChainlinkClient {
         Song storage song = songs[license.songId];
 
         uint256 totalShares;
-        for (uint256 i = 0; i < stakeholders.length; i++) {
-            totalShares += song.stakeholderShares[stakeholders[i]];
+        for (uint256 i = 0; i < song.stakeholdersNumber; i++) {
+            totalShares += song.stakeholderShares[song.stakeholders[i]];
         }
 
-        for (uint256 i = 0; i < stakeholders.length; i++) {
-            address stakeholder = stakeholders[i];
+        for (uint256 i = 0; i < song.stakeholdersNumber; i++) {
+            address stakeholder = song.stakeholders[i];
             uint256 share = song.stakeholderShares[stakeholder];
             uint256 amount = (license.price * share) / totalShares;
             require(token.transfer(stakeholder, amount), "Failed to transfer revenue share");
