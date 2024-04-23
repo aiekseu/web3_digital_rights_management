@@ -65,12 +65,16 @@ npx hardhat compile
 npx hardhat test
 ```
 
-## Contributing
+## Deploy
+
+Run those commands to deploy contract to Polygon Amoy network
 
 ```shell
 npx hardhat run ./scripts/deploy.js  
 npx hardhat verify {DEPLOYED_CONTRACT_ADDRESS}
 ```
+
+## Contributing
 
 I welcome contributions from the community. If you'd like to contribute, please fork the repository and make changes as
 you'd like. Pull requests are warmly welcome.
