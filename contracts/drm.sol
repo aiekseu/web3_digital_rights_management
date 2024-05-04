@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@chainlink/contracts/src/v0.8/ChainlinkClient.sol";
+import "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
 /// @title Music Royalties Distribution
-contract MusicRoyalties is ChainlinkClient {
+contract MusicRoyalties is VRFConsumerBaseV2Plus {
 
     using Counters for Counters.Counter;
 
@@ -21,6 +22,7 @@ contract MusicRoyalties is ChainlinkClient {
         mapping(address => uint256) stakeholderShares;
         uint256 stakeholdersNumber;
     }
+
     mapping(uint256 => Song) public songs;
     Counters.Counter songsCounter;
 
@@ -31,8 +33,19 @@ contract MusicRoyalties is ChainlinkClient {
         uint256 price;
         uint256 duration;
     }
+
     mapping(uint256 => License) public licenses;
     Counters.Counter licensesCounter;
+
+
+    // Chainlink VRF v2.5 setup
+    bytes32 internal keyHash = 0x816bedba8a50b294e5cbd47842baf240c2385f2eaf719edbd4f250a137a8c899;
+    uint256 internal s_subscriptionId = 27386271310033774427731689780733372915241729820450466377140907977388552390469;
+    uint32 internal callbackGasLimit = 2500000;
+    uint16 internal requestConfirmations = 3;
+
+    mapping(uint256 => uint256) public songPlayCounts;
+    mapping(uint256 => uint256) public requestIdToSongId;
 
     /// @notice Event for tracking song registration
     event SongRegistered(uint256 indexed id, address indexed artist, string metadata);
@@ -43,6 +56,33 @@ contract MusicRoyalties is ChainlinkClient {
     /// @notice Event for tracking royalty distribution
     event RoyaltiesDistributed(uint256 indexed id, uint256 playCount);
 
+    constructor() VRFConsumerBaseV2Plus(0x343300b5d84D444B2ADc9116FEF1bED02BE49Cf2) {}
+
+    /// @notice Function to request song play data from an external source (random num for now)
+    /// @param id The unique identifier for the song
+    function requestSongPlayData(uint256 id) external {
+        uint256 requestId = s_vrfCoordinator.requestRandomWords(
+            VRFV2PlusClient.RandomWordsRequest({
+                keyHash: keyHash,
+                subId: s_subscriptionId,
+                requestConfirmations: requestConfirmations,
+                callbackGasLimit: callbackGasLimit,
+                numWords: 1,
+                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: true}))
+            })
+        );
+        requestIdToSongId[requestId] = id;
+    }
+
+    /// @notice Callback function for Chainlink VRF v2.5
+    function fulfillRandomWords(
+        uint256 requestId,
+        uint256[] calldata randomWords
+    ) internal override {
+        uint256 songId = requestIdToSongId[requestId];
+        uint256 randomPlayCount = (randomWords[0] % 100001) + 100; // limiting to the range 100 to 100,100
+        songPlayCounts[songId] = randomPlayCount;
+    }
 
     /// @notice Function to register a song with its metadata and stakeholder shares
     /// @param id The unique identifier for the song
@@ -91,45 +131,48 @@ contract MusicRoyalties is ChainlinkClient {
         }
     }
 
-    /// @notice Function to request song play data from an external source
+    /// @notice Function to get the play count for a specific song by ID
     /// @param id The unique identifier for the song
-    /// @param endpoint The external API endpoint to request the song play data
-    function requestSongPlayData(uint256 id, string calldata endpoint) external {
-        // Chainlink oracle details (oracle address, job ID, payment amount)
-        // call the ChainlinkClient's request data function with the provided endpoint
+    /// @return The play count for the song
+    function getPlayCount(uint256 id) external view returns (uint256) {
+        return songPlayCounts[id];
     }
 
     /// @notice Function to calculate royalties for each stakeholder
     /// @param songId The unique identifier for the song
-    /// @param playCount The number of plays for which royalties are calculated
+    /// @param playPrice The price of one play
     /// @return royaltyAmounts An array containing the calculated royalty amounts for each stakeholder
-    function calculateRoyalties(uint256 songId, uint256 playCount) private view returns (uint256[] memory royaltyAmounts) {
+    function calculateRoyalties(uint256 songId, uint256 playPrice) private view returns (uint256[] memory royaltyAmounts) {
         Song storage song = songs[songId];
         royaltyAmounts = new uint256[](song.stakeholdersNumber);
+        uint256 royaltiesSum = songPlayCounts[songId] * playPrice;
 
         for (uint256 i = 0; i < song.stakeholdersNumber; i++) {
             address stakeholder = song.stakeholders[i];
             uint256 share = song.stakeholderShares[stakeholder];
-            uint256 amount = playCount * share / 100;
+            uint256 amount = royaltiesSum * share / 100;
 
             royaltyAmounts[i] = amount;
         }
     }
-    function calculateRoyaltiesTest(uint256 songId, uint256 playCount) external view returns (uint256[] memory royaltyAmounts) {
-        return calculateRoyalties(songId, playCount);
+
+    /// @notice Function to test royalties calculation for each stakeholder
+    /// @param songId The unique identifier for the song
+    /// @param playPrice The price of one play
+    /// @return royaltyAmounts An array containing the calculated royalty amounts for each stakeholder
+    function calculateRoyaltiesTest(uint256 songId, uint256 playPrice) external view returns (uint256[] memory royaltyAmounts) {
+        return calculateRoyalties(songId, playPrice);
     }
-
-
 
     /// @notice Function to distribute royalties to stakeholders for a specific song
     /// @param id The unique identifier for the song
-    /// @param playCount The number of plays for which royalties are distributed
+    /// @param playPrice The price of one play
     /// @param tokenAddress The address of the ERC20 token used for royalty payments
-    function distributeRoyalties(uint256 id, uint256 playCount, address tokenAddress) external {
+    function distributeRoyalties(uint256 id, uint256 playPrice, address tokenAddress) external {
         IERC20 token = IERC20(tokenAddress);
         Song storage song = songs[id];
 
-        uint256[] memory royalties = calculateRoyalties(id, playCount);
+        uint256[] memory royalties = calculateRoyalties(id, playPrice);
 
         for (uint256 i = 0; i < song.stakeholdersNumber; i++) {
             address recipient = song.stakeholders[i];
@@ -140,23 +183,23 @@ contract MusicRoyalties is ChainlinkClient {
 
     /// @notice Function to distribute royalties in batch for multiple songs
     /// @param ids An array of unique identifiers for the songs
-    /// @param playCounts An array of play counts corresponding to the songs
+    /// @param playPrices An array of one play prices corresponding to the songs
     /// @param tokenAddress The address of the ERC20 token used for royalty payments
     function distributeRoyaltiesBatch(
         uint256[] calldata ids,
-        uint256[] calldata playCounts,
+        uint256[] calldata playPrices,
         address tokenAddress
     ) external {
-        require(ids.length == playCounts.length, "IDs and playCounts length mismatch");
+        require(ids.length == playPrices.length, "IDs and playPrices length mismatch");
 
         IERC20 token = IERC20(tokenAddress);
 
         for (uint256 i = 0; i < ids.length; i++) {
             uint256 id = ids[i];
-            uint256 playCount = playCounts[i];
+            uint256 playPrice = playPrices[i];
             Song storage song = songs[id];
 
-            uint256[] memory royalties = calculateRoyalties(id, playCount);
+            uint256[] memory royalties = calculateRoyalties(id, playPrice);
 
             for (uint256 j = 0; j < song.stakeholdersNumber; j++) {
                 address recipient = song.stakeholders[j];
