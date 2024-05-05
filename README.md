@@ -3,18 +3,20 @@
 This repository hosts the implementation of a Music Royalties Smart Contract on the Polygon blockchain network. This
 project aims to streamline royalty distribution in the music industry using blockchain technology and smart contracts.
 
+# Demo
+- [Chainlink VRF Subscription](https://vrf.chain.link/polygon-amoy/27386271310033774427731689780733372915241729820450466377140907977388552390469)
+- [Smart Contract](https://www.oklink.com/ru/amoy/address/0x53ba8f39a680f88d8cc0644370f794b876cd62e7/contract)
+
 ## Features
 
 The smart contract has the following key features:
 
 - Song registration on the blockchain.
 - Updating royalty distribution for a song.
-- <b>*</b>Monitoring song plays using Chainlink oracle.
+- Monitoring song plays using Chainlink oracle.
 - Calculating royalties for stakeholders.
 - Distributing royalties to stakeholders.
 - Managing song licenses.
-
-<sub>*Not implemented yet</sub>
 
 ## Dependencies
 
@@ -67,9 +69,11 @@ npx hardhat test
 
 ## Deploy
 
-Run those commands to deploy contract to Polygon Amoy network
+Update `s_subscriptionId` to match your Chainlink VRF Subscription ID.
 
-```shell
+Then run those commands to deploy contract to Polygon Amoy network:
+
+```
 npx hardhat run ./scripts/deploy.js  
 npx hardhat verify {DEPLOYED_CONTRACT_ADDRESS}
 ```

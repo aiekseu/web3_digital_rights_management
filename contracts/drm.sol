@@ -4,12 +4,9 @@ pragma solidity ^0.8.0;
 import "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 
 /// @title Music Royalties Distribution
 contract MusicRoyalties is VRFConsumerBaseV2Plus {
-
-    using Counters for Counters.Counter;
 
     /// @notice Struct for storing song data
     struct Song {
@@ -24,7 +21,6 @@ contract MusicRoyalties is VRFConsumerBaseV2Plus {
     }
 
     mapping(uint256 => Song) public songs;
-    Counters.Counter songsCounter;
 
     /// @notice Struct for storing license data
     struct License {
@@ -35,8 +31,6 @@ contract MusicRoyalties is VRFConsumerBaseV2Plus {
     }
 
     mapping(uint256 => License) public licenses;
-    Counters.Counter licensesCounter;
-
 
     // Chainlink VRF v2.5 setup
     bytes32 internal keyHash = 0x816bedba8a50b294e5cbd47842baf240c2385f2eaf719edbd4f250a137a8c899;
@@ -45,7 +39,7 @@ contract MusicRoyalties is VRFConsumerBaseV2Plus {
     uint16 internal requestConfirmations = 3;
 
     mapping(uint256 => uint256) public songPlayCounts;
-    mapping(uint256 => uint256) public requestIdToSongId;
+    mapping(uint256 => uint256) internal requestIdToSongId;
 
     /// @notice Event for tracking song registration
     event SongRegistered(uint256 indexed id, address indexed artist, string metadata);
@@ -57,32 +51,6 @@ contract MusicRoyalties is VRFConsumerBaseV2Plus {
     event RoyaltiesDistributed(uint256 indexed id, uint256 playCount);
 
     constructor() VRFConsumerBaseV2Plus(0x343300b5d84D444B2ADc9116FEF1bED02BE49Cf2) {}
-
-    /// @notice Function to request song play data from an external source (random num for now)
-    /// @param id The unique identifier for the song
-    function requestSongPlayData(uint256 id) external {
-        uint256 requestId = s_vrfCoordinator.requestRandomWords(
-            VRFV2PlusClient.RandomWordsRequest({
-                keyHash: keyHash,
-                subId: s_subscriptionId,
-                requestConfirmations: requestConfirmations,
-                callbackGasLimit: callbackGasLimit,
-                numWords: 1,
-                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: true}))
-            })
-        );
-        requestIdToSongId[requestId] = id;
-    }
-
-    /// @notice Callback function for Chainlink VRF v2.5
-    function fulfillRandomWords(
-        uint256 requestId,
-        uint256[] calldata randomWords
-    ) internal override {
-        uint256 songId = requestIdToSongId[requestId];
-        uint256 randomPlayCount = (randomWords[0] % 100001) + 100; // limiting to the range 100 to 100,100
-        songPlayCounts[songId] = randomPlayCount;
-    }
 
     /// @notice Function to register a song with its metadata and stakeholder shares
     /// @param id The unique identifier for the song
@@ -131,11 +99,30 @@ contract MusicRoyalties is VRFConsumerBaseV2Plus {
         }
     }
 
-    /// @notice Function to get the play count for a specific song by ID
+    /// @notice Function to request song play data from an external source (random num for now)
     /// @param id The unique identifier for the song
-    /// @return The play count for the song
-    function getPlayCount(uint256 id) external view returns (uint256) {
-        return songPlayCounts[id];
+    function requestSongPlayData(uint256 id) external {
+        uint256 requestId = s_vrfCoordinator.requestRandomWords(
+            VRFV2PlusClient.RandomWordsRequest({
+                keyHash: keyHash,
+                subId: s_subscriptionId,
+                requestConfirmations: requestConfirmations,
+                callbackGasLimit: callbackGasLimit,
+                numWords: 1,
+                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: true}))
+            })
+        );
+        requestIdToSongId[requestId] = id;
+    }
+
+    /// @notice Callback function for Chainlink VRF v2.5
+    function fulfillRandomWords(
+        uint256 requestId,
+        uint256[] calldata randomWords
+    ) internal override {
+        uint256 songId = requestIdToSongId[requestId];
+        uint256 randomPlayCount = (randomWords[0] % 100001) + 100; // limiting to the range 100 to 100,100
+        songPlayCounts[songId] = randomPlayCount;
     }
 
     /// @notice Function to calculate royalties for each stakeholder
