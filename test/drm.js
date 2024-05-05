@@ -1,5 +1,7 @@
 const { expect } = require('chai')
-const { ethers } = require('hardhat')
+const { ethers, network } = require('hardhat')
+const { BigNumber } = require('ethers')
+const { keccak256, defaultAbiCoder, hexZeroPad, hexlify } = require('ethers/lib/utils')
 
 const GAS_PRICE = 200 // Gwei
 const MATIC_PRICE_IN_USD = 0.9 // USD
@@ -23,7 +25,7 @@ describe('Proper work of MusicRoyalties Smart Contract', function () {
         testMATIC = await TestToken.deploy()
         await testMATIC.deployed()
 
-        MusicRoyalties = await ethers.getContractFactory('MusicRoyalties');
+        MusicRoyalties = await ethers.getContractFactory('MusicRoyaltiesTest');
         [owner, addr1, addr2, addr3] = await ethers.getSigners()
         musicRoyalties = await MusicRoyalties.deploy()
         await musicRoyalties.deployed()
@@ -63,12 +65,16 @@ describe('Proper work of MusicRoyalties Smart Contract', function () {
             [40, 30, 30],
         )
 
-        // Calculate royalties for the song
+        // Mock the play count
         const playCount = 1000
-        const royaltyAmounts = await musicRoyalties.calculateRoyaltiesTest(1, playCount)
+        await musicRoyalties.connect(owner).setSongPlayCountTest(1, playCount)
+
+        // Calculate royalties
+        const playPrice = 1 // 1 token for 1 play
+        const royaltyAmounts = await musicRoyalties.calculateRoyaltiesTest(1, playPrice)
 
         // Estimate gas consumption
-        const gasEstimate = await musicRoyalties.estimateGas.calculateRoyaltiesTest(1, playCount)
+        const gasEstimate = await musicRoyalties.estimateGas.calculateRoyaltiesTest(1, playPrice)
         const { usd, matic } = calculateTxCost(gasEstimate)
         console.log('Gas used for calculating royalties:', gasEstimate.toString())
         console.log(`Tx cost: ${matic.toFixed(4)} MATIC or $${usd.toFixed(2)}`)
@@ -92,9 +98,13 @@ describe('Proper work of MusicRoyalties Smart Contract', function () {
         // Approve the MusicRoyalties contract to spend test MATIC tokens
         await testMATIC.connect(owner).approve(musicRoyalties.address, amount)
 
-        // Distribute royalties for 1000 plays
+        // Mock the play count
         const playCount = 1000
-        const tx = await musicRoyalties.connect(owner).distributeRoyalties(1, playCount, testMATIC.address)
+        await musicRoyalties.connect(owner).setSongPlayCountTest(1, playCount)
+
+        // Distribute royalties for 1000 plays
+        const playPrice = 1 // 1 token for 1 play
+        const tx = await musicRoyalties.connect(owner).distributeRoyalties(1, playPrice, testMATIC.address)
         const receipt = await tx.wait()
 
         // Measure gas usage
@@ -114,54 +124,58 @@ describe('Proper work of MusicRoyalties Smart Contract', function () {
         expect(addr3Balance).to.equal('300')
     })
 
-  it("Distributes royalties in batch correctly", async function () {
-    await musicRoyalties.connect(owner).registerSong(
-        1,
-        'Song 1',
-        'Artist 1',
-        [addr1.address, addr2.address],
-        [40, 60],
-    )
+    it('Distributes royalties in batch correctly', async function () {
+        await musicRoyalties.connect(owner).registerSong(
+            1,
+            'Song 1',
+            'Artist 1',
+            [addr1.address, addr2.address],
+            [40, 60],
+        )
 
-    await musicRoyalties.connect(owner).registerSong(
-        2,
-        'Song 2',
-        'Artist 2',
-        [addr1.address, addr2.address, addr3.address],
-        [40, 30, 30],
-    )
+        await musicRoyalties.connect(owner).registerSong(
+            2,
+            'Song 2',
+            'Artist 2',
+            [addr1.address, addr2.address, addr3.address],
+            [40, 30, 30],
+        )
 
-    // Approve the transfer of test MATIC tokens from owner to the contract
-    const totalAmount = ethers.utils.parseEther("2000");
-    await testMATIC.connect(owner).approve(musicRoyalties.address, totalAmount);
+        // Approve the transfer of test MATIC tokens from owner to the contract
+        const totalAmount = ethers.utils.parseEther('2000')
+        await testMATIC.connect(owner).approve(musicRoyalties.address, totalAmount)
 
-    // Call the distributeRoyaltiesBatch function
-    const ids = [1, 2];
-    const playCounts = [1000, 1000];
-    const tx = await musicRoyalties
-        .connect(owner)
-        .distributeRoyaltiesBatch(ids, playCounts, testMATIC.address);
+        // Mock the play count
+        const playCount = 1000
+        await musicRoyalties.connect(owner).setSongPlayCountTest(1, playCount)
+        await musicRoyalties.connect(owner).setSongPlayCountTest(2, playCount)
 
-    // Check the gas used
-    const receipt = await tx.wait();
-    const { gasUsed } = receipt
-    const { usd, matic } = calculateTxCost(gasUsed)
-    console.log("Gas used for distributing royalties in batch:", gasUsed.toString());
-    console.log(`Tx cost: ${matic.toFixed(4)} MATIC or $${usd.toFixed(2)}`)
+        // Call the distributeRoyaltiesBatch function
+        const ids = [1, 2]
+        const playPrices = [1, 1] // 1 token for 1 play
+        const tx = await musicRoyalties
+            .connect(owner)
+            .distributeRoyaltiesBatch(ids, playPrices, testMATIC.address)
 
-    // Check if royalties were distributed correctly
-    const addr1Balance = await testMATIC.balanceOf(addr1.address);
-    const addr2Balance = await testMATIC.balanceOf(addr2.address);
-    const addr3Balance = await testMATIC.balanceOf(addr3.address);
+        // Check the gas used
+        const receipt = await tx.wait()
+        const { gasUsed } = receipt
+        const { usd, matic } = calculateTxCost(gasUsed)
+        console.log('Gas used for distributing royalties in batch:', gasUsed.toString())
+        console.log(`Tx cost: ${matic.toFixed(4)} MATIC or $${usd.toFixed(2)}`)
 
-    console.log(addr1Balance, addr2Balance, addr3Balance)
+        // Check if royalties were distributed correctly
+        const addr1Balance = await testMATIC.balanceOf(addr1.address)
+        const addr2Balance = await testMATIC.balanceOf(addr2.address)
+        const addr3Balance = await testMATIC.balanceOf(addr3.address)
 
-    expect(addr1Balance).to.equal("800");
-    expect(addr2Balance).to.equal("900");
-    expect(addr3Balance).to.equal("300");
-  });
+        console.log(addr1Balance, addr2Balance, addr3Balance)
+
+        expect(addr1Balance).to.equal('800')
+        expect(addr2Balance).to.equal('900')
+        expect(addr3Balance).to.equal('300')
+    })
 })
-
 
 describe('Comparison of gas consumptions', function () {
     let MusicRoyalties, musicRoyalties, owner, addr1, addr2, addr3
@@ -191,13 +205,12 @@ describe('Comparison of gas consumptions', function () {
         )
         const song1Receipt = await song1Tx.wait()
 
-
         const song2Tx = await musicRoyalties.connect(owner).registerSong(
             2,
             'Song name with 200 symbolSong name with 100 symbolSong name with 100 symbolSong name with 100 symbolSong name with 200 symbolSong name with 100 symbolSong name with 100 symbolSong name with 100 symbol',
             'Artist name with 200 symbArtist name with 200 symbArtist name with 200 symbArtist name with 200 symbArtist name with 200 symbArtist name with 200 symbArtist name with 200 symbArtist name with 200 symb',
             [addr1.address, addr2.address],
-            [40,60],
+            [40, 60],
         )
         const song2Receipt = await song2Tx.wait()
 
@@ -206,7 +219,7 @@ describe('Comparison of gas consumptions', function () {
             'Song name with 25 symbols',
             'Artist name with 25 symbo',
             [addr1.address, addr2.address, addr1.address, addr2.address, addr1.address, addr2.address, addr1.address, addr2.address, addr1.address, addr2.address],
-            [10,10,10,10,10,10,10,10,10,10],
+            [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
         )
         const song3Receipt = await song3Tx.wait()
 
@@ -215,7 +228,7 @@ describe('Comparison of gas consumptions', function () {
             'Song name with 200 symbolSong name with 100 symbolSong name with 100 symbolSong name with 100 symbolSong name with 200 symbolSong name with 100 symbolSong name with 100 symbolSong name with 100 symbol',
             'Artist name with 200 symbArtist name with 200 symbArtist name with 200 symbArtist name with 200 symbArtist name with 200 symbArtist name with 200 symbArtist name with 200 symbArtist name with 200 symb',
             [addr1.address, addr2.address, addr1.address, addr2.address, addr1.address, addr2.address, addr1.address, addr2.address, addr1.address, addr2.address],
-            [10,10,10,10,10,10,10,10,10,10],
+            [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
         )
         const song4Receipt = await song4Tx.wait()
 
@@ -314,7 +327,7 @@ Never gonna say goodbye
 Never gonna tell a lie and hurt you
             `,
             [addr1.address, addr2.address, addr3.address],
-            [10,20,70],
+            [10, 20, 70],
         )
         const song5Receipt = await song5Tx.wait()
 
@@ -354,6 +367,5 @@ Never gonna tell a lie and hurt you
         expect(song4Gas).to.be.gte(song3Gas)
         expect(song4Gas).to.be.gte(song2Gas)
     })
-
 
 })

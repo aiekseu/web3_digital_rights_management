@@ -129,7 +129,7 @@ contract MusicRoyalties is VRFConsumerBaseV2Plus {
     /// @param songId The unique identifier for the song
     /// @param playPrice The price of one play
     /// @return royaltyAmounts An array containing the calculated royalty amounts for each stakeholder
-    function calculateRoyalties(uint256 songId, uint256 playPrice) private view returns (uint256[] memory royaltyAmounts) {
+    function calculateRoyalties(uint256 songId, uint256 playPrice) internal view returns (uint256[] memory royaltyAmounts) {
         Song storage song = songs[songId];
         royaltyAmounts = new uint256[](song.stakeholdersNumber);
         uint256 royaltiesSum = songPlayCounts[songId] * playPrice;
@@ -141,14 +141,6 @@ contract MusicRoyalties is VRFConsumerBaseV2Plus {
 
             royaltyAmounts[i] = amount;
         }
-    }
-
-    /// @notice Function to test royalties calculation for each stakeholder
-    /// @param songId The unique identifier for the song
-    /// @param playPrice The price of one play
-    /// @return royaltyAmounts An array containing the calculated royalty amounts for each stakeholder
-    function calculateRoyaltiesTest(uint256 songId, uint256 playPrice) external view returns (uint256[] memory royaltyAmounts) {
-        return calculateRoyalties(songId, playPrice);
     }
 
     /// @notice Function to distribute royalties to stakeholders for a specific song

@@ -64,7 +64,7 @@ npx hardhat compile
 5. Run tests:
 
 ```
-npx hardhat test
+TEST=1 npx hardhat test
 ```
 
 ## Deploy
