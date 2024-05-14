@@ -5,7 +5,8 @@ project aims to streamline royalty distribution in the music industry using bloc
 
 # Demo
 - [Chainlink VRF Subscription](https://vrf.chain.link/polygon-amoy/27386271310033774427731689780733372915241729820450466377140907977388552390469)
-- [Smart Contract](https://www.oklink.com/ru/amoy/address/0x53ba8f39a680f88d8cc0644370f794b876cd62e7/contract)
+- [Smart Contract](https://www.oklink.com/ru/amoy/address/0x9d7be496c9d862f67f692383fdac6d1438903265)
+- [Songs dataset](https://www.kaggle.com/datasets/stefancomanita/top-us-songs-from-1950-to-2019-w-lyrics)
 
 ## Features
 

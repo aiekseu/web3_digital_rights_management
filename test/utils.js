@@ -32,7 +32,7 @@ function get700Songs() {
         fs.createReadStream(filePath)
             .pipe(parser)
             .on('data', row => {
-                results.push({ name: row.song, artist: row.artist, lyrics: row.lyrics })
+                results.push({ name: row.song, artist: row.artist, lyrics: row.lyrics, year: row.year })
             })
             .on('end', () => {
                 resolve(results)

@@ -102,5 +102,61 @@ describe('Comparison of gas consumptions', function () {
 
             expect(true).to.equal(true)
         }).timeout(60000)
+
+        it('With 1/2 of sha256 hash', async () => {
+            for (let i = 0; i < songList.length; i++) {
+                const { name, artist, lyrics } = songList[i];
+                const data = `${name}${artist}${lyrics}`;
+                const hash = ethers.utils.sha256(ethers.utils.toUtf8Bytes(data));
+                const half_hash = hash.slice(0, hash.length / 2)
+
+                const songTx = await musicRoyalties.connect(owner).registerSong(
+                    i + 1,
+                    half_hash,
+                    '',
+                    [addr1.address],
+                    [100],
+                );
+
+                const songReceipt = await songTx.wait()
+                const { gasUsed } = songReceipt
+
+                gasSum += gasUsed.toNumber();
+            }
+
+            const { usd, matic } = calculateTxCost(gasSum)
+            console.log('Gas used for registering 700 songs with sha256 hash:', gasSum.toString())
+            console.log(`Tx cost: ${matic.toFixed(4)} MATIC or $${usd.toFixed(2)}`)
+
+            expect(true).to.equal(true)
+        }).timeout(60000)
+
+        it('With 1/4 of sha256 hash', async () => {
+            for (let i = 0; i < songList.length; i++) {
+                const { name, artist, lyrics } = songList[i];
+                const data = `${name}${artist}${lyrics}`;
+                const hash = ethers.utils.sha256(ethers.utils.toUtf8Bytes(data));
+                const quarter_hash = hash.slice(0, hash.length / 4)
+
+                const songTx = await musicRoyalties.connect(owner).registerSong(
+                    i + 1,
+                    quarter_hash,
+                    '',
+                    [addr1.address],
+                    [100],
+                );
+
+                const songReceipt = await songTx.wait()
+                const { gasUsed } = songReceipt
+
+                gasSum += gasUsed.toNumber();
+            }
+
+            const { usd, matic } = calculateTxCost(gasSum)
+            console.log('Gas used for registering 700 songs with sha256 hash:', gasSum.toString())
+            console.log(`Tx cost: ${matic.toFixed(4)} MATIC or $${usd.toFixed(2)}`)
+
+            expect(true).to.equal(true)
+        }).timeout(60000)
     })
 })
