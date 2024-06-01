@@ -39,7 +39,7 @@ contract MusicRoyalties is VRFConsumerBaseV2Plus {
     uint16 internal requestConfirmations = 3;
 
     mapping(uint256 => uint256) public songPlayCounts;
-    mapping(uint256 => uint256) internal requestIdToSongId;
+    mapping(uint256 => uint256) public requestIdToSongId;
 
     /// @notice Event for tracking song registration
     event SongRegistered(uint256 indexed id, address indexed artist, string metadata);
@@ -49,6 +49,9 @@ contract MusicRoyalties is VRFConsumerBaseV2Plus {
 
     /// @notice Event for tracking royalty distribution
     event RoyaltiesDistributed(uint256 indexed id, uint256 playCount);
+
+    /// @notice Event for play counts requests
+    event PlayCountRequested(uint256 indexed songId, uint256 requestId);
 
     constructor() VRFConsumerBaseV2Plus(0x343300b5d84D444B2ADc9116FEF1bED02BE49Cf2) {}
 
@@ -109,10 +112,12 @@ contract MusicRoyalties is VRFConsumerBaseV2Plus {
                 requestConfirmations: requestConfirmations,
                 callbackGasLimit: callbackGasLimit,
                 numWords: 1,
-                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: true}))
+                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false}))
             })
         );
         requestIdToSongId[requestId] = id;
+
+        emit PlayCountRequested(id, requestId);
     }
 
     /// @notice Callback function for Chainlink VRF v2.5

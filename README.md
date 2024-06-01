@@ -5,7 +5,7 @@ project aims to streamline royalty distribution in the music industry using bloc
 
 # Demo
 - [Chainlink VRF Subscription](https://vrf.chain.link/polygon-amoy/27386271310033774427731689780733372915241729820450466377140907977388552390469)
-- [Smart Contract](https://www.oklink.com/ru/amoy/address/0x9d7be496c9d862f67f692383fdac6d1438903265)
+- [Smart Contract on PolygonScan](https://amoy.polygonscan.com/address/0x1c8130Ae4c713b9bAaf4fEE12BF8fFEBB22faFA9)
 - [Songs dataset](https://www.kaggle.com/datasets/stefancomanita/top-us-songs-from-1950-to-2019-w-lyrics)
 
 ## Features
@@ -38,31 +38,25 @@ the distribution of royalties for multiple songs and recipients in a single tran
 
 Here's how you can setup and run this project:
 
-1. Clone the repository:
-
-```
-git clone https://github.com/<yourusername>/music-royalties-smart-contract.git
-```
-
-2. Navigate to the project directory:
+1. Navigate to the project directory:
 
 ```
 cd music-royalties-smart-contract
 ```
 
-3. Install dependencies:
+2. Install dependencies:
 
 ```
 npm install
 ```
 
-4. Compile the smart contract:
+3. Compile the smart contract:
 
 ```
 npx hardhat compile
 ```
 
-5. Run tests:
+4. Run tests:
 
 ```
 TEST=1 npx hardhat test
